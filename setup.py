@@ -7,7 +7,7 @@ setup(
     author = "Simon Wood",
     author_email = "simon@mungewell.org",
     description = "Library for Sample SysEx files for Novation Circuit",
-    license = "GPLv3",
+    license = "GPLv2",
     keywords = "Novation Circuit Sample SysEx",
     url = "https://github.com/mungewell/circuit_samples",
     py_modules=["circuit_samples"],
