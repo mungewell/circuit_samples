@@ -349,7 +349,10 @@ if __name__ == "__main__":
             else:
                 name = os.path.join(path, "sample_{0:0=2d}.wav".format(count))
 
-            infile = wave.open(name, "rb")
+            infile = None
+            if os.path.isfile(name):
+                infile = wave.open(name, "rb")
+
             if infile:
                 if infile.getsampwidth() > 1:
                     raw = circuit.endianSwap(infile.readframes(
@@ -371,6 +374,10 @@ if __name__ == "__main__":
                         "rate": infile.getframerate(),
                         "length": len(raw),
                         "data": raw })
+
+                samples['count'] = count
+            else:
+                break
 
     if options.add and samples:
         if options.sample < 1:
