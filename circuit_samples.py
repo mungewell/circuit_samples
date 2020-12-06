@@ -264,12 +264,15 @@ if __name__ == "__main__":
 
     if options.unpack and samples:
         path = os.path.join(os.getcwd(), options.unpack)
+        if os.path.exists(path):
+            sys.exit("Directory %s already exists" % path)
+
         os.mkdir(path)
 
         count = 1
         for sample in samples['samples']:
             if options.verbose:
-                print("Unpacking %d Samples : %s" % (count, path))
+                print("Unpacking sample %d : %s" % (count, path))
 
             if options.raw:
                 name = os.path.join(path, "sample_{0:0=2d}.raw".format(count))
@@ -301,7 +304,7 @@ if __name__ == "__main__":
                 sys.exit("Sample %d does not exist" % options.sample)
 
             if options.verbose:
-                print("Unpacking Sample #%d to %s" % (options.sample, options.export))
+                print("Unpacking Sample %d to %s" % (options.sample, options.export))
 
             sample = samples['samples'][options.sample - 1]
             if options.raw:
@@ -342,7 +345,7 @@ if __name__ == "__main__":
 
         for count in range(1,65):
             if options.verbose:
-                print("Packing %d Samples : %s" % (count, path))
+                print("Packing sample %d : %s" % (count, path))
 
             if options.raw:
                 name = os.path.join(path, "sample_{0:0=2d}.raw".format(count))
@@ -397,8 +400,11 @@ if __name__ == "__main__":
                     options.add = options.add[:-4] + '.raw'
 
             name = os.path.join(os.getcwd(), options.add)
+            if not os.path.isfile(name):
+                sys.exit("Unable to open file %s for reading", name)
+
             if options.verbose:
-                print("Adding Sample #%d : %s" % (count + 1, name))
+                print("Adding sample %d : %s" % (count + 1, name))
 
             if options.raw:
                 infile = open(name, "rb")
@@ -449,6 +455,9 @@ if __name__ == "__main__":
 
         if len(sampleData) > circuit.maxLength:
             sys.exit("Resultant SysEx too large for Circuit")
+
+        if options.verbose:
+            print("Creating SysEx file %s" % options.outfile)
 
         circuit.writeSysEx(options.outfile, sampleData)
 
