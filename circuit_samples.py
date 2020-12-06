@@ -29,10 +29,10 @@ CircuitSamples = Struct(
 #--------------------------------------------------
 class circuit_samples(object):
     circuitHeader = (0x00, 0x20, 0x29, 0x00)
-    maxLength = 0x0023B000
+    maxLength = 0x0057F000
 
-    length = 0x0023B000
-    offset = 0x0057F000
+    offset = 0x0023B000
+    length = 0
     unpackedData = None
     checksum = 0
 
@@ -105,8 +105,8 @@ class circuit_samples(object):
                 cmd = msg.data[4]
                 if header == self.circuitHeader:
                     if cmd == 0x77:
-                        self.length = self.unpackNyble(msg.data[5:13])
-                        self.offset = self.unpackNyble(msg.data[13:21])
+                        self.offset = self.unpackNyble(msg.data[5:13])
+                        self.length = self.unpackNyble(msg.data[13:21])
                     if cmd == 0x79:
                         self.unpackedData += self.unpack(bytes(msg.data[5:]))
                     if cmd == 0x7a:
@@ -123,8 +123,8 @@ class circuit_samples(object):
         self.checksum = crc32(unpackedData)
 
         data = bytes(self.circuitHeader) + b"\x77" + \
-                self.packNyble(self.length) + \
-                self.packNyble(self.offset)
+                self.packNyble(self.offset) + \
+                self.packNyble(self.length)
         messages.append(mido.Message('sysex', data=data))
 
         while unpackedData:
