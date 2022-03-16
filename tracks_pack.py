@@ -1,6 +1,6 @@
 #!/usr/bin/python
 #
-# Script decode '.circuittrackspack' files
+# Script to decode '.circuittrackspack' files
 # (c) Simon Wood, 14 March 2022
 #
 
@@ -10,34 +10,45 @@
 from construct import *
 
 PK = Struct(
-    Const(b"PK"),
-    "unknown" / Bytes(6),
-    "type" / Byte,			# 0x08 = FILE
-    "unknown1" / Bytes(9),
+    Const(b"PK\x03\x04"),
+    "version" / Int16ul,
+    "bitflag" / Int16ul,
+    "method" / Int16ul,			# 0x08 = Deflate
+    "mod_time" / Bytes(2),
+    "mod_date" / Bytes(2),
 
+    "crc32" / Int32ul,
     "len_blob" / Int32ul,
-    "unknown2" / Bytes(4),
-    "len_name" / Int32ul,
+    "len_expand" / Int32ul,
+    "len_name" / Int16ul,
+    "len_extra" / Int16ul,
 
     "group" / PaddedString(this._.len_name, "utf8"),
     "len_file" / Computed(this.len_name - this._.len_name),
+
     "name" / PaddedString(this.len_file, "utf8"),
+    "extra" / Bytes(this.len_extra),
     "blob" / Bytes(this.len_blob),
 
     "check" / Check(this.group == this._.name),	# check for 'json'
 )
 
 PKGRP = Struct(
-    Const(b"PK"),
-    "unknown" / Bytes(6),
-    Const(b"\x00"),			# 0x00 = GROUP
-    "unknown1" / Bytes(9),
+    Const(b"PK\x03\x04"),
+    "version" / Int16ul,
+    "bitflag" / Int16ul,
+    Const(b"\x00\x00"),			# 0x00 = GROUP
+    "mod_time" / Bytes(2),
+    "mod_date" / Bytes(2),
 
+    "crc32" / Int32ul,
     "len_blob" / Int32ul,
-    "unknown2" / Bytes(4),
-    "len_name" / Int32ul,
+    "len_expand" / Int32ul,
+    "len_name" / Int16ul,
+    "len_extra" / Int16ul,
 
     "name" / PaddedString(this.len_name, "utf8"),
+    "extra" / Bytes(this.len_extra),
     "blob" / Bytes(this.len_blob),
 
     "files" / GreedyRange(PK),
@@ -47,8 +58,8 @@ PACK = Struct(
     "len_name" / Computed(0),
     "name" / Computed(""),
 
-    "groups1" / GreedyRange(PKGRP),
-    "json1" / PK,
+    "groups" / GreedyRange(PKGRP),
+    "json" / PK,
 
 )
 
@@ -128,7 +139,7 @@ def main():
         os.mkdir(root)
 
         # extract files from groups
-        for group in pack["groups1"]:
+        for group in pack["groups"]:
             path = os.path.join(root, group["name"])
             os.mkdir(path)
             for f in group["files"]:
@@ -136,18 +147,18 @@ def main():
                     name = os.path.join(path, f["name"])
                     outfile = open(name, "wb")
 
-                    if outfile:
+                    if outfile and f["method"] == 0x08:
                         outfile.write(inflate(f["blob"]))
                         outfile.close()
 
 
         # extract json
-        if pack["json1"]["len_blob"]:
-            name = os.path.join(root, pack["json1"]["name"])
+        if pack["json"]["len_blob"]:
+            name = os.path.join(root, pack["json"]["name"])
             outfile = open(name, "wb")
 
-            if outfile:
-                outfile.write(inflate(pack["json1"]["blob"]))
+            if outfile and pack["json"]["method"] == 0x08:
+                outfile.write(inflate(pack["json"]["blob"]))
                 outfile.close()
 
 
