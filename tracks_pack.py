@@ -11,31 +11,79 @@ from construct import *
 
 PK = Struct(
     Const(b"PK"),
-    Const(b"\x03\x04\x0a\x00\x00\x00"),
-    "unknown" / Byte,
-    Const(b"\x00\x0e\x75\x9c\x53"),
-    "unknown1" / Bytes(4),
+    "unknown" / Bytes(6),
+    "type" / Byte,			# 0x08 = FILE
+    "unknown1" / Bytes(9),
+
     "len_blob" / Int32ul,
     "unknown2" / Bytes(4),
     "len_name" / Int32ul,
+
+    "group" / PaddedString(this._.len_name, "utf8"),
+    "len_file" / Computed(this.len_name - this._.len_name),
+    "name" / PaddedString(this.len_file, "utf8"),
+    "blob" / Bytes(this.len_blob),
+
+    "check" / Check(this.group == this._.name),	# check for 'json'
+)
+
+PKGRP = Struct(
+    Const(b"PK"),
+    "unknown" / Bytes(6),
+    Const(b"\x00"),			# 0x00 = GROUP
+    "unknown1" / Bytes(9),
+
+    "len_blob" / Int32ul,
+    "unknown2" / Bytes(4),
+    "len_name" / Int32ul,
+
     "name" / PaddedString(this.len_name, "utf8"),
     "blob" / Bytes(this.len_blob),
+
+    "files" / GreedyRange(PK),
 )
 
 PACK = Struct(
-    "project_dir" / PK,
-    "projects" / Array(64, PK),
+    "len_name" / Computed(0),
+    "name" / Computed(""),
 
-    "sample_dir"/ PK,
-    "samples" /Array(64, PK),
+    "groups1" / GreedyRange(PKGRP),
+    "json1" / PK,
 
-    "patch_dir" / PK,
-    "patches" / Array(128, PK),
-
-    "json" / PK,
 )
 
 #--------------------------------------------------
+
+import zlib
+
+def deflate(data, compresslevel=9):
+    compress = zlib.compressobj(
+            compresslevel,        # level: 0-9
+            zlib.DEFLATED,        # method: must be DEFLATED
+            -zlib.MAX_WBITS,      # window size in bits:
+                                  #   -15..-8: negate, suppress header
+                                  #   8..15: normal
+                                  #   16..30: subtract 16, gzip header
+            zlib.DEF_MEM_LEVEL,   # mem level: 1..8/9
+            0                     # strategy:
+                                  #   0 = Z_DEFAULT_STRATEGY
+                                  #   1 = Z_FILTERED
+                                  #   2 = Z_HUFFMAN_ONLY
+                                  #   3 = Z_RLE
+                                  #   4 = Z_FIXED
+    )
+    deflated = compress.compress(data)
+    deflated += compress.flush()
+    return deflated
+
+def inflate(data):
+    decompress = zlib.decompressobj(
+            -zlib.MAX_WBITS  # see above
+    )
+    inflated = decompress.decompress(data)
+    inflated += decompress.flush()
+    return inflated
+
 def main():
     import sys
     import os
@@ -76,57 +124,30 @@ def main():
         root = os.path.join(os.getcwd(), options.unpack)
         if os.path.exists(root):
             sys.exit("Directory %s already exists" % root)
+
         os.mkdir(root)
 
-        # extract projects
-        path = os.path.join(root, pack["project_dir"]["name"])
-        os.mkdir(path)
-        for i in range(len(pack["projects"])):
-            if pack["projects"][i]["len_blob"]:
-                # work around '/' and '\' issues
-                name = os.path.join(path, pack["projects"][i]["name"] \
-                        [len(pack["project_dir"]["name"]):])
-                outfile = open(name, "wb")
+        # extract files from groups
+        for group in pack["groups1"]:
+            path = os.path.join(root, group["name"])
+            os.mkdir(path)
+            for f in group["files"]:
+                if f["len_blob"]:
+                    name = os.path.join(path, f["name"])
+                    outfile = open(name, "wb")
 
-                if outfile:
-                    outfile.write(pack["projects"][i]["blob"])
-                    outfile.close()
+                    if outfile:
+                        outfile.write(inflate(f["blob"]))
+                        outfile.close()
 
-        # extract samples
-        path = os.path.join(root, pack["sample_dir"]["name"])
-        os.mkdir(path)
-        for i in range(len(pack["samples"])):
-            if pack["samples"][i]["len_blob"]:
-                # work around '/' and '\' issues
-                name = os.path.join(path, pack["samples"][i]["name"] \
-                        [len(pack["sample_dir"]["name"]):])
-                outfile = open(name, "wb")
-
-                if outfile:
-                    outfile.write(pack["samples"][i]["blob"])
-                    outfile.close()
-
-        # extract patchs
-        path = os.path.join(root, pack["patch_dir"]["name"])
-        os.mkdir(path)
-        for i in range(len(pack["patches"])):
-            if pack["patches"][i]["len_blob"]:
-                # work around '/' and '\' issues
-                name = os.path.join(path, pack["patches"][i]["name"] \
-                        [len(pack["patch_dir"]["name"]):])
-                outfile = open(name, "wb")
-
-                if outfile:
-                    outfile.write(pack["patches"][i]["blob"])
-                    outfile.close()
 
         # extract json
-        if pack["patches"][i]["len_blob"]:
-            name = os.path.join(root, pack["json"]["name"])
+        if pack["json1"]["len_blob"]:
+            name = os.path.join(root, pack["json1"]["name"])
             outfile = open(name, "wb")
 
             if outfile:
-                outfile.write(pack["json"]["blob"])
+                outfile.write(inflate(pack["json1"]["blob"]))
                 outfile.close()
 
 
